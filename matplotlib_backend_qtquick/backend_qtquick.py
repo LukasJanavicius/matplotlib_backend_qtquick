@@ -8,10 +8,10 @@ from matplotlib.backend_bases import (
     FigureCanvasBase, NavigationToolbar2,
     MouseButton)
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5 import (
-    TimerQT, SPECIAL_KEYS, MODIFIER_KEYS, cursord)
-from .qt_compat import (
-    QtCore, QtGui, QtQuick, QtWidgets,
+from matplotlib.backends.backend_qt import (
+    TimerQT, SPECIAL_KEYS, _MODIFIER_KEYS, cursord)
+from matplotlib_backend_qtquick.qt_compat import (
+    QtCore, QtGui, QtQuick, QtWidgets, QtQml,
     QT_API, QT_API_PYSIDE2)
 
 
@@ -24,16 +24,16 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
     dpi_ratio_changed = QtCore.Signal()
 
     # map Qt button codes to MouseEvent's ones:
-    buttond = {QtCore.Qt.LeftButton: MouseButton.LEFT,
-               QtCore.Qt.MidButton: MouseButton.MIDDLE,
-               QtCore.Qt.RightButton: MouseButton.RIGHT,
-               QtCore.Qt.XButton1: MouseButton.BACK,
-               QtCore.Qt.XButton2: MouseButton.FORWARD,
+    buttond = {QtCore.Qt.MouseButton.LeftButton: MouseButton.LEFT,
+               QtCore.Qt.MouseButton.MiddleButton: MouseButton.MIDDLE,
+               QtCore.Qt.MouseButton.RightButton: MouseButton.RIGHT,
+               QtCore.Qt.MouseButton.XButton1: MouseButton.BACK,
+               QtCore.Qt.MouseButton.XButton2: MouseButton.FORWARD,
                }
 
     def __init__(self, figure=None, parent=None):
         if figure is None:
-            figure = Figure((6.0, 4.0))
+            figure = Figure()
 
         # It seems like Qt doesn't implement cooperative inheritance
         QtQuick.QQuickPaintedItem.__init__(self, parent=parent)
@@ -44,7 +44,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
         # Activate hover events and mouse press events
         self.setAcceptHoverEvents(True)
-        self.setAcceptedMouseButtons(QtCore.Qt.AllButtons)
+        self.setAcceptedMouseButtons(QtCore.Qt.MouseButton.AllButtons)
         self.setAntialiasing(True)
         # We don't want to scale up the figure DPI more than once.
         # Note, we don't handle a signal for changing DPI yet.
@@ -63,6 +63,8 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         self._draw_rect_callback = lambda painter: None
 
         self.resize(*self.get_width_height())
+
+
 
     def _update_figure_dpi(self):
         dpi = self.dpi_ratio * self.figure._original_dpi
@@ -99,6 +101,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
     def get_width_height(self):
         w, h = FigureCanvasBase.get_width_height(self)
+        
         return int(w / self.dpi_ratio), int(h / self.dpi_ratio)
 
     def drawRectangle(self, rect):
@@ -106,10 +109,10 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         # to be called at the end of paintEvent.
         if rect is not None:
             def _draw_rect_callback(painter):
-                pen = QtGui.QPen(QtCore.Qt.black, 1 / self.dpi_ratio,
-                                 QtCore.Qt.DotLine)
+                pen = QtGui.QPen(QtCore.Qt.GlobalColor.black, 1 / self.dpi_ratio,
+                                 QtCore.Qt.PenStyle.DotLine)
                 painter.setPen(pen)
-                painter.drawRect(*(pt / self.dpi_ratio for pt in rect))
+                painter.drawRect(QtCore.QRectF(*(int(pt / self.dpi_ratio) for pt in rect)))
         else:
             def _draw_rect_callback(painter):
                 return
@@ -154,19 +157,28 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
                 # Uncaught exceptions are fatal for PyQt5, so catch them.
                 traceback.print_exc()
 
-    def geometryChanged(self, new_geometry, old_geometry):
+    def geometryChangeHelper(self, new_geometry, old_geometry):
         w = new_geometry.width() * self.dpi_ratio
         h = new_geometry.height() * self.dpi_ratio
 
         if (w <= 0.0) or (h <= 0.0):
             return
-
         dpival = self.figure.dpi
         winch = w / dpival
         hinch = h / dpival
         self.figure.set_size_inches(winch, hinch, forward=False)
         FigureCanvasBase.resize_event(self)
         self.draw_idle()
+
+
+    def geometryChange(self, new_geometry, old_geometry):
+        self.geometryChangeHelper(new_geometry, old_geometry)
+        QtQuick.QQuickPaintedItem.geometryChange(self,
+                                                 new_geometry,
+                                                 old_geometry)
+
+    def geometryChanged(self, new_geometry, old_geometry):
+        self.geometryChangeHelper(new_geometry, old_geometry)
         QtQuick.QQuickPaintedItem.geometryChanged(self,
                                                   new_geometry,
                                                   old_geometry)
@@ -180,7 +192,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
     def hoverEnterEvent(self, event):
         try:
-            x, y = self.mouseEventCoords(event.pos())
+            x, y = self.mouseEventCoords(event.position())
         except AttributeError:
             # the event from PyQt4 does not include the position
             x = y = None
@@ -207,31 +219,31 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         return x * dpi_ratio, y * dpi_ratio
 
     def hoverMoveEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         FigureCanvasBase.motion_notify_event(self, x, y, guiEvent=event)
 
     # hoverMoveEvent kicks in when no mouse buttons are pressed
     # otherwise mouseMoveEvent are emitted
     def mouseMoveEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         FigureCanvasBase.motion_notify_event(self, x, y, guiEvent=event)
 
     def mousePressEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         button = self.buttond.get(event.button())
         if button is not None:
             FigureCanvasBase.button_press_event(self, x, y, button,
                                                 guiEvent=event)
 
     def mouseReleaseEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         button = self.buttond.get(event.button())
         if button is not None:
             FigureCanvasBase.button_release_event(self, x, y, button,
                                                   guiEvent=event)
 
     def mouseDoubleClickEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         button = self.buttond.get(event.button())
         if button is not None:
             FigureCanvasBase.button_press_event(self, x, y,
@@ -239,7 +251,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
                                                 guiEvent=event)
 
     def wheelEvent(self, event):
-        x, y = self.mouseEventCoords(event.pos())
+        x, y = self.mouseEventCoords(event.position())
         # from QWheelEvent::delta doc
         if event.pixelDelta().x() == 0 and event.pixelDelta().y() == 0:
             steps = event.angleDelta().y() / 120
@@ -268,7 +280,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         # get names of the pressed modifier keys
         # bit twiddling to pick out modifier keys from event_mods bitmask,
         # if event_key is a MODIFIER, it should not be duplicated in mods
-        mods = [name for name, mod_key, qt_key in MODIFIER_KEYS
+        mods = [name for name, mod_key, qt_key in _MODIFIER_KEYS
                 if event_key != qt_key and (event_mods & mod_key) == mod_key]
         try:
             # for certain keys (enter, left, backspace, etc) use a word for the
@@ -322,7 +334,7 @@ class MatplotlibIconProvider(QtQuick.QQuickImageProvider):
     """ This class provide the matplotlib icons for the navigation toolbar.
     """
 
-    def __init__(self, img_type=QtQuick.QQuickImageProvider.Image):
+    def __init__(self, img_type=QtQml.QQmlImageProviderBase.ImageType):
         self.basedir = os.path.join(matplotlib.rcParams['datapath'], 'images')
         QtQuick.QQuickImageProvider.__init__(self, img_type)
 

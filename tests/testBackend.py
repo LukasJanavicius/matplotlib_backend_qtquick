@@ -39,32 +39,38 @@ class DisplayBridge(QtCore.QObject):
         self.axes.plot(x, y)
         canvas.draw_idle()
 
+def shutdown():
+    # https://bugreports.qt.io/browse/QTBUG-81247
+    # ensures that the qml engine is destroyed before the python objects,
+    del globals()["engine"]
 
-class TestBackend(unittest.TestCase):
-    """ The actual test class
-    """
 
-    def test_basicPlotting(self):
-        QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
-        app = QtGui.QGuiApplication(sys.argv)
-        engine = QtQml.QQmlApplicationEngine()
 
-        # instantate the display bridge
-        displayBridge = DisplayBridge()
 
-        # Expose the Python object to QML
-        context = engine.rootContext()
-        context.setContextProperty("displayBridge", displayBridge)
+if __name__ == '__main__':
+    # QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
+    app = QtGui.QGuiApplication(sys.argv)
+    engine = QtQml.QQmlApplicationEngine()
 
-        # matplotlib stuff
-        QtQml.qmlRegisterType(FigureCanvasQtQuickAgg, "Backend", 1, 0, "FigureCanvas")
+    # instantate the display bridge
+    displayBridge = DisplayBridge()
 
-        # Load the QML file
-        qmlFile = Path(Path.cwd(), Path(__file__).parent, "main.qml")
-        engine.load(QtCore.QUrl.fromLocalFile(str(qmlFile)))
+    # Expose the Python object to QML
+    context = engine.rootContext()
+    context.setContextProperty("displayBridge", displayBridge)
 
-        win = engine.rootObjects()[0]
-        displayBridge.updateWithCanvas(win.findChild(QtCore.QObject, "figure"))
+    # matplotlib stuff
+    QtQml.qmlRegisterType(FigureCanvasQtQuickAgg, "Backend", 1, 0, "FigureCanvas")
 
-        # execute and cleanup
-        app.exec_()
+    # Load the QML file
+    qmlFile = Path(Path.cwd(), Path(__file__).parent, "main.qml")
+    engine.load(QtCore.QUrl.fromLocalFile(str(qmlFile)))
+
+    win = engine.rootObjects()[0]
+    displayBridge.updateWithCanvas(win.findChild(QtCore.QObject, "figure"))
+
+    app.aboutToQuit.connect(shutdown)
+    if not engine.rootObjects():
+        sys.exit(-1)
+
+    sys.exit(app.exec())

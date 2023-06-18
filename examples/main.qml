@@ -18,6 +18,9 @@ ApplicationWindow {
         objectName : "figure"
         dpi_ratio: Screen.devicePixelRatio
 	    anchors.fill: parent
+        Component.onCompleted: {
+            displayBridge.connectCanvas(mplView)
+        }
     }
 
     footer: ToolBar {

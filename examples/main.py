@@ -10,54 +10,61 @@ from matplotlib_backend_qtquick.backend_qtquick import (
     NavigationToolbar2QtQuick)
 from matplotlib_backend_qtquick.backend_qtquickagg import (
     FigureCanvasQtQuickAgg)
-from matplotlib_backend_qtquick.qt_compat import QtGui, QtQml, QtCore
-
+from matplotlib_backend_qtquick.qt_compat import QtGui, QtQml, QtCore,QtWidgets
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 
 class DisplayBridge(QtCore.QObject):
     """ A bridge class to interact with the plot in python
     """
-    coordinatesChanged = QtCore.Signal(str)
+    coordinatesChanged = QtCore.pyqtSignal(str)
+    canvasConnected = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         # The figure and toolbar
+        self.canvas = None
         self.figure = None
         self.toolbar = None
 
+        self._axes = None
         # this is used to display the coordinates of the mouse in the window
         self._coordinates = ""
+        self.canvasConnected.connect(self.updateCanvas)
 
-    def updateWithCanvas(self, canvas):
+
+    @QtCore.pyqtSlot(FigureCanvasQtQuickAgg)
+    def connectCanvas(self, canvas: FigureCanvasQtQuickAgg):
         """ initialize with the canvas for the figure
         """
-        self.figure = canvas.figure
-        self.toolbar = NavigationToolbar2QtQuick(canvas=canvas)
-
-        # make a small plot
-        self.axes = self.figure.add_subplot(111)
-        self.axes.grid(True)
-
-        x = np.linspace(0, 2*np.pi, 100)
-        y = np.sin(x)
-
-        self.axes.plot(x, y)
-        canvas.draw_idle()
-
+        self.canvas = canvas
+        self.figure = self.canvas.figure
+        self.toolbar = NavigationToolbar2QtQuick(canvas=self.canvas)
+        
         # connect for displaying the coordinates
         self.figure.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.canvasConnected.emit()
+
+    @QtCore.pyqtProperty(Axes)
+    def axes(self):
+        return self.figure.add_subplot(111) if self._axes is None else self._axes
+        
+
+    @QtCore.pyqtSlot()
+    def updateCanvas(self):
+        self.canvas.draw_idle()
  
-    # define the coordinates property
-    # (I have had problems using the @QtCore.Property directy in the past)
-    def getCoordinates(self):
+    @QtCore.pyqtProperty(str, notify=coordinatesChanged)
+    def coordinates(self):
         return self._coordinates
-    
-    def setCoordinates(self, coordinates):
+
+    @coordinates.setter
+    def coordinates(self, coordinates):
         self._coordinates = coordinates
         self.coordinatesChanged.emit(self._coordinates)
     
-    coordinates = QtCore.Property(str, getCoordinates, setCoordinates,
-                                  notify=coordinatesChanged)
 
     # The toolbar commands
     @QtCore.Slot()
@@ -89,13 +96,19 @@ class DisplayBridge(QtCore.QObject):
         if event.inaxes == self.axes:
             self.coordinates = f"({event.xdata:.2f}, {event.ydata:.2f})"
 
+def shutdown():
+    # https://bugreports.qt.io/browse/QTBUG-81247
+    # ensures that the qml engine is destroyed before the python objects,
+    del globals()["engine"]
+
 if __name__ == "__main__":
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
-    app = QtGui.QGuiApplication(sys.argv)
+    # QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
+    app = QtWidgets.QApplication (sys.argv)
     engine = QtQml.QQmlApplicationEngine()
 
     # instantate the display bridge
     displayBridge = DisplayBridge()
+
 
     # Expose the Python object to QML
     context = engine.rootContext()
@@ -108,8 +121,19 @@ if __name__ == "__main__":
     qmlFile = Path(Path.cwd(), Path(__file__).parent, "main.qml")
     engine.load(QtCore.QUrl.fromLocalFile(str(qmlFile)))
 
-    win = engine.rootObjects()[0]
-    displayBridge.updateWithCanvas(win.findChild(QtCore.QObject, "figure"))
+    fig, ax = plt.subplots()
+    x = np.linspace(0, 2*np.pi, 100)
+    y = np.sin(x)
+    ax.plot(x, y)
+    displayBridge.setAxes(ax)
 
-    # execute and cleanup
-    app.exec_()
+    # win = engine.rootObjects()[0]
+    # displayBridge.updateWithCanvas(win.findChild(QtCore.QObject, "figure"))
+
+    app.aboutToQuit.connect(shutdown)
+    if not engine.rootObjects():
+        sys.exit(-1)
+
+    sys.exit(app.exec())
+
+

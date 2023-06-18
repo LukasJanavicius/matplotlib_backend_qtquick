@@ -33,7 +33,7 @@ class FigureCanvasQtQuickAgg(FigureCanvasAgg, FigureCanvasQtQuick):
             # into argb format and is in a 4 byte unsigned int.  Little endian
             # system is LSB first and expects the bytes in reverse order
             # (bgra).
-            if QtCore.QSysInfo.ByteOrder == QtCore.QSysInfo.LittleEndian:
+            if QtCore.QSysInfo.Endian.ByteOrder == QtCore.QSysInfo.Endian.LittleEndian:
                 # stringBuffer = self.renderer._renderer.tostring_bgra()
                 #   tostring_xxx do not exist anymore in _renderer
 
@@ -46,9 +46,9 @@ class FigureCanvasQtQuickAgg(FigureCanvasAgg, FigureCanvasQtQuick):
                 stringBuffer = self.renderer.tostring_argb()
 
             # convert the Agg rendered image -> qImage
-            qImage = QtGui.QImage(stringBuffer, self.renderer.width,
-                                  self.renderer.height,
-                                  QtGui.QImage.Format_RGBA8888)
+            qImage = QtGui.QImage(stringBuffer, int(self.renderer.width),
+                                  int(self.renderer.height),
+                                  QtGui.QImage.Format.Format_RGBA8888)
             if hasattr(qImage, 'setDevicePixelRatio'):
                 # Not available on Qt4 or some older Qt5.
                 qImage.setDevicePixelRatio(self.dpi_ratio)
@@ -71,7 +71,7 @@ class FigureCanvasQtQuickAgg(FigureCanvasAgg, FigureCanvasQtQuick):
             reg = self.copy_from_bbox(bbox)
             stringBuffer = reg.to_string_argb()
             qImage = QtGui.QImage(stringBuffer, w, h,
-                                  QtGui.QImage.Format_RGBA8888)
+                                  QtGui.QImage.Format.Format_RGBA8888)
 
             if hasattr(qImage, 'setDevicePixelRatio'):
                 # Not available on Qt4 or some older Qt5.

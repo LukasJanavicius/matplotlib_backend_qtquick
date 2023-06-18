@@ -12,12 +12,12 @@ ApplicationWindow {
     title: qsTr("QtQuick backend test")
 
     // So that the test exits in 5 seconds
-    Timer {
-        id: exitTimer
-        interval: 5000
-	running: true
-        onTriggered: mainWindow.close()
-    }
+    // Timer {
+    //     id: exitTimer
+    //     interval: 5000
+	// running: true
+    //     onTriggered: mainWindow.close()
+    // }
     
     FigureCanvas {
         id: mplView
