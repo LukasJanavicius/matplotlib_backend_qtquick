@@ -9,10 +9,10 @@ from matplotlib.backend_bases import (
     MouseButton)
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt import (
-    TimerQT, SPECIAL_KEYS, _MODIFIER_KEYS, cursord)
-from matplotlib_backend_qtquick.qt_compat import (
+    TimerQT, SPECIAL_KEYS, _MODIFIER_KEYS as MODIFIER_KEYS, cursord)
+from .qt_compat import (
     QtCore, QtGui, QtQuick, QtWidgets, QtQml,
-    QT_API, QT_API_PYSIDE2)
+    QT_API, QT_API_PYSIDE2, QT_API_PYSIDE6)
 
 
 class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
@@ -33,7 +33,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
     def __init__(self, figure=None, parent=None):
         if figure is None:
-            figure = Figure()
+            figure = Figure((6.0, 4.0))
 
         # It seems like Qt doesn't implement cooperative inheritance
         QtQuick.QQuickPaintedItem.__init__(self, parent=parent)
@@ -63,8 +63,6 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         self._draw_rect_callback = lambda painter: None
 
         self.resize(*self.get_width_height())
-
-
 
     def _update_figure_dpi(self):
         dpi = self.dpi_ratio * self.figure._original_dpi
@@ -101,7 +99,6 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
     def get_width_height(self):
         w, h = FigureCanvasBase.get_width_height(self)
-        
         return int(w / self.dpi_ratio), int(h / self.dpi_ratio)
 
     def drawRectangle(self, rect):
@@ -112,7 +109,8 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
                 pen = QtGui.QPen(QtCore.Qt.GlobalColor.black, 1 / self.dpi_ratio,
                                  QtCore.Qt.PenStyle.DotLine)
                 painter.setPen(pen)
-                painter.drawRect(QtCore.QRectF(*(int(pt / self.dpi_ratio) for pt in rect)))
+                painter.drawRect(QtCore.QRectF(
+                    *(pt / self.dpi_ratio for pt in rect)))
         else:
             def _draw_rect_callback(painter):
                 return
@@ -163,6 +161,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
 
         if (w <= 0.0) or (h <= 0.0):
             return
+
         dpival = self.figure.dpi
         winch = w / dpival
         hinch = h / dpival
@@ -170,13 +169,14 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         FigureCanvasBase.resize_event(self)
         self.draw_idle()
 
-
+    # Overload for Qt 6
     def geometryChange(self, new_geometry, old_geometry):
         self.geometryChangeHelper(new_geometry, old_geometry)
         QtQuick.QQuickPaintedItem.geometryChange(self,
                                                  new_geometry,
                                                  old_geometry)
 
+    # Overload for Qt 5
     def geometryChanged(self, new_geometry, old_geometry):
         self.geometryChangeHelper(new_geometry, old_geometry)
         QtQuick.QQuickPaintedItem.geometryChanged(self,
@@ -280,7 +280,7 @@ class FigureCanvasQtQuick(QtQuick.QQuickPaintedItem, FigureCanvasBase):
         # get names of the pressed modifier keys
         # bit twiddling to pick out modifier keys from event_mods bitmask,
         # if event_key is a MODIFIER, it should not be duplicated in mods
-        mods = [name for name, mod_key, qt_key in _MODIFIER_KEYS
+        mods = [name for name, mod_key, qt_key in MODIFIER_KEYS
                 if event_key != qt_key and (event_mods & mod_key) == mod_key]
         try:
             # for certain keys (enter, left, backspace, etc) use a word for the
@@ -335,11 +335,11 @@ class MatplotlibIconProvider(QtQuick.QQuickImageProvider):
     """
 
     def __init__(self, img_type=QtQml.QQmlImageProviderBase.ImageType):
-        self.basedir = os.path.join(matplotlib.rcParams['datapath'], 'images')
+        self.basedir=os.path.join(matplotlib.rcParams['datapath'], 'images')
         QtQuick.QQuickImageProvider.__init__(self, img_type)
 
     def requestImage(self, ids, size, reqSize):
-        img = QtGui.QImage(os.path.join(self.basedir, ids + '.png'))
+        img=QtGui.QImage(os.path.join(self.basedir, ids + '.png'))
         size.setWidth(img.width())
         size.setHeight(img.height())
         return img
@@ -349,33 +349,33 @@ class NavigationToolbar2QtQuick(QtCore.QObject, NavigationToolbar2):
     """ NavigationToolbar2 customized for QtQuick
     """
 
-    messageChanged = QtCore.Signal(str)
+    messageChanged=QtCore.Signal(str)
 
-    leftChanged = QtCore.Signal()
-    rightChanged = QtCore.Signal()
-    topChanged = QtCore.Signal()
-    bottomChanged = QtCore.Signal()
-    wspaceChanged = QtCore.Signal()
-    hspaceChanged = QtCore.Signal()
+    leftChanged=QtCore.Signal()
+    rightChanged=QtCore.Signal()
+    topChanged=QtCore.Signal()
+    bottomChanged=QtCore.Signal()
+    wspaceChanged=QtCore.Signal()
+    hspaceChanged=QtCore.Signal()
 
-    def __init__(self, canvas, parent=None):
+    def __init__(self, canvas, parent = None):
 
         # I think this is needed due to a bug in PySide2
-        if QT_API == QT_API_PYSIDE2:
+        if QT_API in [QT_API_PYSIDE2, QT_API_PYSIDE6]:
             QtCore.QObject.__init__(self, parent)
             NavigationToolbar2.__init__(self, canvas)
         else:
-            super().__init__(canvas=canvas, parent=parent)
+            super().__init__(canvas = canvas, parent = parent)
 
-        self._message = ""
+        self._message=""
 
         #
         # Store margin
         #
-        self._defaults = {}
+        self._defaults={}
         for attr in ('left', 'bottom', 'right', 'top', 'wspace', 'hspace', ):
-            val = getattr(self.canvas.figure.subplotpars, attr)
-            self._defaults[attr] = val
+            val=getattr(self.canvas.figure.subplotpars, attr)
+            self._defaults[attr]=val
             setattr(self, attr, val)
 
     def _init_toolbar(self):
@@ -389,83 +389,83 @@ class NavigationToolbar2QtQuick(QtCore.QObject, NavigationToolbar2):
 
     def setMessage(self, msg):
         if msg != self._message:
-            self._message = msg
+            self._message=msg
             self.messageChanged.emit(msg)
 
-    message = QtCore.Property(str, getMessage, setMessage,
-                              notify=messageChanged)
+    message=QtCore.Property(str, getMessage, setMessage,
+                              notify = messageChanged)
 
     def getLeft(self):
         return self.canvas.figure.subplotpars.left
 
     def setLeft(self, value):
         if value != self.canvas.figure.subplotpars.left:
-            self.canvas.figure.subplots_adjust(left=value)
+            self.canvas.figure.subplots_adjust(left = value)
             self.leftChanged.emit()
 
             self.canvas.draw_idle()
 
-    left = QtCore.Property(float, getLeft, setLeft, notify=leftChanged)
+    left=QtCore.Property(float, getLeft, setLeft, notify = leftChanged)
 
     def getRight(self):
         return self.canvas.figure.subplotpars.right
 
     def setRight(self, value):
         if value != self.canvas.figure.subplotpars.right:
-            self.canvas.figure.subplots_adjust(right=value)
+            self.canvas.figure.subplots_adjust(right = value)
             self.rightChanged.emit()
 
             self.canvas.draw_idle()
 
-    right = QtCore.Property(float, getRight, setRight, notify=rightChanged)
+    right=QtCore.Property(float, getRight, setRight, notify = rightChanged)
 
     def getTop(self):
         return self.canvas.figure.subplotpars.top
 
     def setTop(self, value):
         if value != self.canvas.figure.subplotpars.top:
-            self.canvas.figure.subplots_adjust(top=value)
+            self.canvas.figure.subplots_adjust(top = value)
             self.topChanged.emit()
 
             self.canvas.draw_idle()
 
-    top = QtCore.Property(float, getTop, setTop, notify=topChanged)
+    top=QtCore.Property(float, getTop, setTop, notify = topChanged)
 
     def getBottom(self):
         return self.canvas.figure.subplotpars.bottom
 
     def setBottom(self, value):
         if value != self.canvas.figure.subplotpars.bottom:
-            self.canvas.figure.subplots_adjust(bottom=value)
+            self.canvas.figure.subplots_adjust(bottom = value)
             self.bottomChanged.emit()
 
             self.canvas.draw_idle()
 
-    bottom = QtCore.Property(float, getBottom, setBottom, notify=bottomChanged)
+    bottom=QtCore.Property(float, getBottom, setBottom, notify = bottomChanged)
 
     def getHspace(self):
         return self.canvas.figure.subplotpars.hspace
 
     def setHspace(self, value):
         if value != self.canvas.figure.subplotpars.hspace:
-            self.canvas.figure.subplots_adjust(hspace=value)
+            self.canvas.figure.subplots_adjust(hspace = value)
             self.hspaceChanged.emit()
 
             self.canvas.draw_idle()
 
-    hspace = QtCore.Property(float, getHspace, setHspace, notify=hspaceChanged)
+    hspace=QtCore.Property(float, getHspace, setHspace, notify = hspaceChanged)
 
     def getWspace(self):
         return self.canvas.figure.subplotpars.wspace
 
     def setWspace(self, value):
         if value != self.canvas.figure.subplotpars.wspace:
-            self.canvas.figure.subplots_adjust(wspace=value)
+            self.canvas.figure.subplots_adjust(wspace = value)
             self.wspaceChanged.emit()
 
             self.canvas.draw_idle()
 
-    wspace = QtCore.Property(float, getWspace, setWspace, notify=wspaceChanged)
+    wspace=QtCore.Property(float, getWspace, setWspace, notify = wspaceChanged)
 
     def set_history_buttons(self):
         """Enable or disable back/forward button"""
@@ -481,9 +481,9 @@ class NavigationToolbar2QtQuick(QtCore.QObject, NavigationToolbar2):
     def draw_with_locators_update(self):
         """Redraw the canvases, update the locators"""
         for a in self.canvas.figure.get_axes():
-            xaxis = getattr(a, 'xaxis', None)
-            yaxis = getattr(a, 'yaxis', None)
-            locators = []
+            xaxis=getattr(a, 'xaxis', None)
+            yaxis=getattr(a, 'yaxis', None)
+            locators=[]
             if xaxis is not None:
                 locators.append(xaxis.get_major_locator())
                 locators.append(xaxis.get_minor_locator())
@@ -497,14 +497,14 @@ class NavigationToolbar2QtQuick(QtCore.QObject, NavigationToolbar2):
 
     def draw_rubberband(self, event, x0, y0, x1, y1):
         """Draw a rectangle rubberband to indicate zoom limits"""
-        height = self.canvas.figure.bbox.height
-        y1 = height - y1
-        y0 = height - y0
+        height=self.canvas.figure.bbox.height
+        y1=height - y1
+        y0=height - y0
 
-        w = abs(x1 - x0)
-        h = abs(y1 - y0)
+        w=abs(x1 - x0)
+        h=abs(y1 - y0)
 
-        rect = [int(val)for val in (min(x0, x1), min(y0, y1), w, h)]
+        rect=[int(val)for val in (min(x0, x1), min(y0, y1), w, h)]
         self.canvas.drawRectangle(rect)
 
     def remove_rubberband(self):
@@ -523,9 +523,9 @@ class NavigationToolbar2QtQuick(QtCore.QObject, NavigationToolbar2):
 
     def print_figure(self, fname, *args, **kwargs):
         if fname:
-            fname = QtCore.QUrl(fname).toLocalFile()
+            fname=QtCore.QUrl(fname).toLocalFile()
             # save dir for next time
-            matplotlib.rcParams['savefig.directory'] = os.path.dirname(fname)
+            matplotlib.rcParams['savefig.directory']=os.path.dirname(fname)
         NavigationToolbar2.print_figure(self, fname, *args, **kwargs)
         self.canvas.draw_idle()
 

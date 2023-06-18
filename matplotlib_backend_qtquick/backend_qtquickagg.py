@@ -11,6 +11,7 @@ from .backend_qtquick import (
 class FigureCanvasQtQuickAgg(FigureCanvasAgg, FigureCanvasQtQuick):
     """ This class customizes the FigureCanvasQtQuick for Agg
     """
+
     def __init__(self, figure=None, parent=None):
         super().__init__(figure=figure, parent=parent)
         self.blitbox = None
